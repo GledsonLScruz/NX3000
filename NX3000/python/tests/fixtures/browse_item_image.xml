@@ -1,0 +1,8 @@
+<item xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+  <dc:title>IMG_0001</dc:title>
+  <dc:date>2024-01-02T03:04:05</dc:date>
+  <res protocolInfo="http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_LRG">http://192.168.107.1/DCIM/100PHOTO/IMG_0001.JPG</res>
+  <res protocolInfo="http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN">http://192.168.107.1/DCIM/100PHOTO/TN_IMG_0001.JPG</res>
+  <res protocolInfo="http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_SM">http://192.168.107.1/DCIM/100PHOTO/SC_IMG_0001.JPG</res>
+</item>
+

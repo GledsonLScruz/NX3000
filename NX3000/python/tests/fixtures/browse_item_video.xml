@@ -1,0 +1,7 @@
+<item xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">
+  <dc:title>VID_0002</dc:title>
+  <dc:date>2024-01-03T04:05:06</dc:date>
+  <res protocolInfo="http-get:*:video/mp4:DLNA.ORG_PN=AVC_MP4_BL_CIF15_AAC_520">http://192.168.107.1/DCIM/100VIDEO/VID_0002.MP4</res>
+  <res protocolInfo="http-get:*:image/jpeg:DLNA.ORG_PN=JPEG_TN">http://192.168.107.1/DCIM/100VIDEO/TN_VID_0002.JPG</res>
+</item>
+
