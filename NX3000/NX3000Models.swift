@@ -76,6 +76,15 @@ struct MediaAsset: Identifiable, Hashable, Sendable {
         thumbnailURL ?? screenImageURL ?? fullContentURL
     }
 
+    var gridPreviewURL: URL {
+        switch type {
+        case .image:
+            return screenImageURL ?? thumbnailURL ?? fullContentURL
+        case .video:
+            return thumbnailURL ?? screenImageURL ?? fullContentURL
+        }
+    }
+
     var displayURL: URL {
         screenImageURL ?? fullContentURL
     }

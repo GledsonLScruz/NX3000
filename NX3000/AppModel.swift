@@ -42,7 +42,7 @@ final class AppModel: ObservableObject {
     var connectionBadgeTitle: String {
         switch connectionState {
         case .checkingWiFi:
-            return "Checking Wi‑Fi"
+            return "Preparing Connection"
         case .needsWiFi:
             return "Wi‑Fi Required"
         case .readyToConnect:
@@ -85,11 +85,11 @@ final class AppModel: ObservableObject {
     var connectionMessage: String {
         switch connectionState {
         case .checkingWiFi:
-            return "Looking for a Wi‑Fi connection before trying the camera."
+            return "Preparing the connection flow before trying the camera."
         case .needsWiFi:
             return "Join the Samsung NX3000 Wi‑Fi network, then come back and continue."
         case .readyToConnect:
-            return "Wi‑Fi is available. The app can now try the NX3000 handshake."
+            return "The app can now try the NX3000 handshake."
         case .connecting:
             return "Talking to the camera and loading the first page of media."
         case .connected:
@@ -135,15 +135,6 @@ final class AppModel: ObservableObject {
     }
 
     func checkConnectionAndLoad() async {
-        guard networkStatusService.snapshot.isWiFiConnected else {
-            connectionState = .needsWiFi
-            activeAlert = AlertContext(
-                title: "Wi‑Fi Required",
-                message: NX3000Error.noWiFiConnection.localizedDescription
-            )
-            return
-        }
-
         isCheckingConnection = true
         connectionState = .connecting
 
@@ -253,18 +244,6 @@ final class AppModel: ObservableObject {
     private func handleNetworkSnapshot(_ snapshot: NetworkSnapshot) {
         guard snapshot.isResolved else {
             connectionState = .checkingWiFi
-            return
-        }
-
-        guard snapshot.isWiFiConnected else {
-            mediaItems = []
-            nextStartIndex = 0
-            totalMatches = nil
-            hasCompletedHandshake = false
-            connectionState = .needsWiFi
-            Task {
-                await cameraClient.resetSession()
-            }
             return
         }
 

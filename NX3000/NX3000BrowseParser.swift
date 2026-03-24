@@ -129,6 +129,12 @@ private final class DIDLItemsDelegate: NSObject, XMLParserDelegate {
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         return formatter
     }()
+    private lazy var dateOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     func parser(
         _ parser: XMLParser,
@@ -225,7 +231,10 @@ private final class DIDLItemsDelegate: NSObject, XMLParserDelegate {
         }
 
         let normalizedDate = item.date.replacingOccurrences(of: "Z", with: "+00:00")
-        let parsedDate = isoFormatter.date(from: normalizedDate) ?? fallbackFormatter.date(from: item.date)
+        let parsedDate =
+            isoFormatter.date(from: normalizedDate) ??
+            fallbackFormatter.date(from: item.date) ??
+            dateOnlyFormatter.date(from: item.date)
         guard let date = parsedDate else {
             throw NX3000Error.parseFailed("Unsupported date format: \(item.date)")
         }
