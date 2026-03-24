@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var isLoadingNextPage = false
     @Published private(set) var isProcessingAssetAction = false
     @Published private(set) var assetActionMessage = ""
+    @Published var showsLocalNetworkSettingsAlert = false
     @Published var selectedAsset: MediaAsset?
     @Published var activeShareItem: ShareItem?
     @Published var activeAlert: AlertContext?
@@ -18,11 +19,14 @@ final class AppModel: ObservableObject {
     let networkStatusService = NetworkStatusService()
 
     private let cameraClient = NX3000CameraClient()
+    private let localNetworkAuthorizationService = LocalNetworkAuthorizationService()
     private let photoLibraryService = PhotoLibraryService()
     private var cancellables: Set<AnyCancellable> = []
     private let pageSize = 50
     private var nextStartIndex = 0
     private var totalMatches: Int?
+    private var reachedEndOfBrowseResults = false
+    private var localNetworkPermissionDenied = false
     private var hasCompletedHandshake = false
     private var hasHandledLaunch = false
 
@@ -45,14 +49,18 @@ final class AppModel: ObservableObject {
             return "Preparing Connection"
         case .needsWiFi:
             return "Wi‑Fi Required"
+        case .needsLocalNetworkPermission:
+            return "Local Network Access"
         case .readyToConnect:
             return "Ready to Connect"
         case .connecting:
             return "Connecting"
         case .connected:
             return "Connected"
-        case .failed:
+        case .handshakeFailed:
             return "Connection Failed"
+        case .browseFailed:
+            return "Browse Failed"
         }
     }
 
@@ -60,7 +68,9 @@ final class AppModel: ObservableObject {
         switch connectionState {
         case .connected:
             return "wifi"
-        case .failed:
+        case .needsLocalNetworkPermission:
+            return "lock.shield"
+        case .handshakeFailed, .browseFailed:
             return "exclamationmark.triangle"
         case .needsWiFi:
             return "wifi.slash"
@@ -73,7 +83,9 @@ final class AppModel: ObservableObject {
         switch connectionState {
         case .connected:
             return .green
-        case .failed:
+        case .needsLocalNetworkPermission:
+            return AppTheme.primaryPink
+        case .handshakeFailed, .browseFailed:
             return .red
         case .needsWiFi:
             return AppTheme.primaryPink
@@ -88,20 +100,28 @@ final class AppModel: ObservableObject {
             return "Preparing the connection flow before trying the camera."
         case .needsWiFi:
             return "Join the Samsung NX3000 Wi‑Fi network, then come back and continue."
+        case .needsLocalNetworkPermission:
+            return "Allow Local Network access so the app can find and reach the camera on Wi‑Fi."
         case .readyToConnect:
             return "The app can now try the NX3000 handshake."
         case .connecting:
             return "Talking to the camera and loading the first page of media."
         case .connected:
             return "The camera is connected and ready."
-        case .failed:
+        case .handshakeFailed:
             return "The camera did not respond. Confirm you joined the camera’s network and that MobileLink is still open."
+        case .browseFailed:
+            return "The camera responded, but loading the media list failed. Try the browse request again."
         }
     }
 
     var lastConnectionError: String? {
-        guard case let .failed(message) = connectionState else { return nil }
-        return message
+        switch connectionState {
+        case .handshakeFailed(let message), .browseFailed(let message):
+            return message
+        default:
+            return nil
+        }
     }
 
     var mediaSubtitle: String {
@@ -129,12 +149,17 @@ final class AppModel: ObservableObject {
     func handleAppLaunch() async {
         guard !hasHandledLaunch else { return }
         hasHandledLaunch = true
+        _ = await ensureLocalNetworkPermission(promptForSettingsOnDenial: true)
         if networkStatusService.snapshot.isResolved {
             handleNetworkSnapshot(networkStatusService.snapshot)
         }
     }
 
     func checkConnectionAndLoad() async {
+        guard await ensureLocalNetworkPermission(promptForSettingsOnDenial: true) else {
+            return
+        }
+
         isCheckingConnection = true
         connectionState = .connecting
 
@@ -150,7 +175,7 @@ final class AppModel: ObservableObject {
         } catch {
             hasCompletedHandshake = false
             mediaItems = []
-            connectionState = .failed(error.localizedDescription)
+            connectionState = .handshakeFailed(error.localizedDescription)
         }
     }
 
@@ -163,6 +188,7 @@ final class AppModel: ObservableObject {
         isLoadingInitialPage = true
         nextStartIndex = 0
         totalMatches = nil
+        reachedEndOfBrowseResults = false
         mediaItems = []
 
         defer {
@@ -238,10 +264,47 @@ final class AppModel: ObservableObject {
         if let totalMatches {
             return mediaItems.count < totalMatches
         }
-        return true
+        return !reachedEndOfBrowseResults
+    }
+
+    private func ensureLocalNetworkPermission(promptForSettingsOnDenial: Bool) async -> Bool {
+        switch await localNetworkAuthorizationService.requestAuthorization() {
+        case .granted:
+            let shouldRefreshConnectionState = localNetworkPermissionDenied
+            localNetworkPermissionDenied = false
+            showsLocalNetworkSettingsAlert = false
+
+            if shouldRefreshConnectionState, networkStatusService.snapshot.isResolved {
+                handleNetworkSnapshot(networkStatusService.snapshot)
+            }
+
+            return true
+        case .denied:
+            localNetworkPermissionDenied = true
+            connectionState = .needsLocalNetworkPermission
+
+            if promptForSettingsOnDenial {
+                showsLocalNetworkSettingsAlert = true
+            }
+
+            return false
+        case .failed(let message):
+            if promptForSettingsOnDenial {
+                activeAlert = AlertContext(
+                    title: "Local Network Check Failed",
+                    message: message
+                )
+            }
+            return true
+        }
     }
 
     private func handleNetworkSnapshot(_ snapshot: NetworkSnapshot) {
+        if localNetworkPermissionDenied {
+            connectionState = .needsLocalNetworkPermission
+            return
+        }
+
         guard snapshot.isResolved else {
             connectionState = .checkingWiFi
             return
@@ -261,6 +324,7 @@ final class AppModel: ObservableObject {
 
             totalMatches = page.totalMatches
             nextStartIndex = startingIndex + page.numberReturned
+            reachedEndOfBrowseResults = page.totalMatches == nil && page.numberReturned < pageSize
 
             if replaceExisting {
                 mediaItems = page.items
@@ -268,13 +332,9 @@ final class AppModel: ObservableObject {
                 let existingIDs = Set(mediaItems.map { $0.id })
                 mediaItems.append(contentsOf: page.items.filter { !existingIDs.contains($0.id) })
             }
-
-            if page.numberReturned == 0 && page.totalMatches == nil {
-                nextStartIndex = mediaItems.count
-            }
         } catch {
             if replaceExisting {
-                connectionState = .failed(error.localizedDescription)
+                connectionState = .browseFailed(error.localizedDescription)
             } else {
                 activeAlert = AlertContext(
                     title: "Pagination Failed",

@@ -121,10 +121,12 @@ struct BrowsePage: Sendable {
 enum CameraConnectionState: Equatable {
     case checkingWiFi
     case needsWiFi
+    case needsLocalNetworkPermission
     case readyToConnect
     case connecting
     case connected
-    case failed(String)
+    case handshakeFailed(String)
+    case browseFailed(String)
 }
 
 enum CameraSetupStep: Int, CaseIterable, Identifiable {

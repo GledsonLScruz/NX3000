@@ -38,6 +38,7 @@ struct ContentView: View {
 
 private struct ConnectionGuideView: View {
     @EnvironmentObject private var appModel: AppModel
+    @Environment(\.openURL) private var openURL
     @AppStorage("connectionGuideShowsSteps") private var showsSetupSteps = false
 
     var body: some View {
@@ -63,6 +64,17 @@ private struct ConnectionGuideView: View {
                 .padding(20)
                 .frame(maxWidth: 720)
             }
+        }
+        .alert("Local Network Access Required", isPresented: $appModel.showsLocalNetworkSettingsAlert) {
+            Button("Open Settings") {
+                guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+                openURL(settingsURL)
+            }
+
+            Button("Not Now", role: .cancel) {
+            }
+        } message: {
+            Text("NX3000 needs Local Network access to find the camera on Wi‑Fi. If you already denied the system prompt, enable it again in Settings.")
         }
     }
 
@@ -358,12 +370,18 @@ private struct MediaGridCell: View {
                     .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                Image(systemName: asset.type.badgeSymbol)
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 30, height: 30)
-                    .background(Capsule().fill(Color.black.opacity(0.72)))
-                    .foregroundStyle(.white)
-                    .padding(10)
+                HStack(spacing: 6) {
+                    Image(systemName: asset.type.badgeSymbol)
+                        .font(.system(size: 12, weight: .bold))
+
+                    Text("PQ")
+                        .font(.system(size: 11, weight: .black, design: .rounded))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(Capsule().fill(Color.black.opacity(0.72)))
+                .foregroundStyle(.white)
+                .padding(10)
             }
 
             Text(asset.title)
@@ -389,6 +407,7 @@ private struct MediaDetailView: View {
 
     let items: [MediaAsset]
     @State private var selectedID: String
+    @State private var showsPreviewQualityMessage = false
 
     init(items: [MediaAsset], initialAsset: MediaAsset) {
         self.items = items
@@ -416,6 +435,20 @@ private struct MediaDetailView: View {
                     Spacer()
 
                     HStack(spacing: 12) {
+                        if currentAsset.type == .image {
+                            Button {
+                                showsPreviewQualityMessage = true
+                            } label: {
+                                Text("Preview Quality")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 44)
+                                    .background(Capsule().fill(Color.black.opacity(0.42)))
+                            }
+                            .buttonStyle(.plain)
+                        }
+
                         chromeButton(systemName: "arrow.down.circle") {
                             Task {
                                 await appModel.saveToPhotoLibrary(currentAsset)
@@ -467,6 +500,12 @@ private struct MediaDetailView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .alert("Preview Quality", isPresented: $showsPreviewQualityMessage) {
+            Button("OK", role: .cancel) {
+            }
+        } message: {
+            Text("This photo preview is not rendered at maximum quality to improve performance. Better quality is preserved when you save the photo to your device or share it.")
+        }
     }
 
     private var currentAsset: MediaAsset {
