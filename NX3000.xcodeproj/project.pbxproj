@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		6F3859E82F71AB82003492C2 /* NX3000.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NX3000.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000012F71AB82003492C2 /* NX3000LiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NX3000LiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -49,6 +50,13 @@
 			);
 			target = 6F3859E72F71AB82003492C2 /* NX3000 */;
 		};
+		B10000042F71AB82003492C2 /* Exceptions for "NX3000LiveActivityExtension" folder in "NX3000LiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B100000A2F71AB82003492C2 /* NX3000LiveActivityExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,10 +68,58 @@
 			path = NX3000;
 			sourceTree = "<group>";
 		};
+		B10000022F71AB82003492C2 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		B10000032F71AB82003492C2 /* NX3000LiveActivityExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B10000042F71AB82003492C2 /* Exceptions for "NX3000LiveActivityExtension" folder in "NX3000LiveActivityExtension" target */,
+			);
+			path = NX3000LiveActivityExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXBuildFile section */
+		B10000062F71AB82003492C2 /* NX3000LiveActivityExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B10000012F71AB82003492C2 /* NX3000LiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B100000B2F71AB82003492C2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6F3859E02F71AB82003492C2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B100000A2F71AB82003492C2;
+			remoteInfo = NX3000LiveActivityExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B10000052F71AB82003492C2 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000062F71AB82003492C2 /* NX3000LiveActivityExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		6F3859E52F71AB82003492C2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000072F71AB82003492C2 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -77,6 +133,8 @@
 			isa = PBXGroup;
 			children = (
 				6F3859EA2F71AB82003492C2 /* NX3000 */,
+				B10000022F71AB82003492C2 /* Shared */,
+				B10000032F71AB82003492C2 /* NX3000LiveActivityExtension */,
 				6F3859E92F71AB82003492C2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				6F3859E82F71AB82003492C2 /* NX3000.app */,
+				B10000012F71AB82003492C2 /* NX3000LiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -99,13 +158,16 @@
 				6F3859E42F71AB82003492C2 /* Sources */,
 				6F3859E52F71AB82003492C2 /* Frameworks */,
 				6F3859E62F71AB82003492C2 /* Resources */,
+				B10000052F71AB82003492C2 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B100000C2F71AB82003492C2 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6F3859EA2F71AB82003492C2 /* NX3000 */,
+				B10000022F71AB82003492C2 /* Shared */,
 			);
 			name = NX3000;
 			packageProductDependencies = (
@@ -113,6 +175,29 @@
 			productName = NX3000;
 			productReference = 6F3859E82F71AB82003492C2 /* NX3000.app */;
 			productType = "com.apple.product-type.application";
+		};
+		B100000A2F71AB82003492C2 /* NX3000LiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B100000F2F71AB82003492C2 /* Build configuration list for PBXNativeTarget "NX3000LiveActivityExtension" */;
+			buildPhases = (
+				B10000092F71AB82003492C2 /* Sources */,
+				B10000072F71AB82003492C2 /* Frameworks */,
+				B10000082F71AB82003492C2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000032F71AB82003492C2 /* NX3000LiveActivityExtension */,
+				B10000022F71AB82003492C2 /* Shared */,
+			);
+			name = NX3000LiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = NX3000LiveActivityExtension;
+			productReference = B10000012F71AB82003492C2 /* NX3000LiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -125,6 +210,9 @@
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					6F3859E72F71AB82003492C2 = {
+						CreatedOnToolsVersion = 26.2;
+					};
+					B100000A2F71AB82003492C2 = {
 						CreatedOnToolsVersion = 26.2;
 					};
 				};
@@ -144,12 +232,20 @@
 			projectRoot = "";
 			targets = (
 				6F3859E72F71AB82003492C2 /* NX3000 */,
+				B100000A2F71AB82003492C2 /* NX3000LiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		6F3859E62F71AB82003492C2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000082F71AB82003492C2 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -166,7 +262,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B10000092F71AB82003492C2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B100000C2F71AB82003492C2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B100000A2F71AB82003492C2 /* NX3000LiveActivityExtension */;
+			targetProxy = B100000B2F71AB82003492C2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		6F3859F12F71AB84003492C2 /* Debug */ = {
@@ -343,6 +454,64 @@
 			};
 			name = Release;
 		};
+		B100000D2F71AB82003492C2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8432FP2K23;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NX3000LiveActivityExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gledsoncruz.NX3000.LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B100000E2F71AB82003492C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8432FP2K23;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NX3000LiveActivityExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gledsoncruz.NX3000.LiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -360,6 +529,15 @@
 			buildConfigurations = (
 				6F3859F42F71AB84003492C2 /* Debug */,
 				6F3859F52F71AB84003492C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B100000F2F71AB82003492C2 /* Build configuration list for PBXNativeTarget "NX3000LiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B100000D2F71AB82003492C2 /* Debug */,
+				B100000E2F71AB82003492C2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

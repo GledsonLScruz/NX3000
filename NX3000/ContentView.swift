@@ -26,6 +26,18 @@ struct ContentView: View {
                 dismissButton: .default(Text("OK"))
             )
         }
+        .alert(item: $appModel.activeBatchFailurePrompt) { prompt in
+            Alert(
+                title: Text("Could not save \(prompt.assetTitle)"),
+                message: Text(prompt.message),
+                primaryButton: .default(Text("Continue")) {
+                    appModel.resolveBatchFailurePrompt(shouldContinue: true)
+                },
+                secondaryButton: .destructive(Text("Stop")) {
+                    appModel.resolveBatchFailurePrompt(shouldContinue: false)
+                }
+            )
+        }
         .sheet(item: $appModel.activeShareItem) { item in
             ActivityView(activityItems: [item.url])
         }
@@ -252,9 +264,14 @@ private struct MediaGridView: View {
                     } else {
                         LazyVGrid(columns: columns, spacing: 14) {
                             ForEach(appModel.mediaItems) { asset in
-                                MediaGridCell(asset: asset)
+                                MediaGridCell(
+                                    asset: asset,
+                                    isSelectionMode: appModel.isSelectionMode,
+                                    isSelected: appModel.isAssetSelected(asset),
+                                    isSelectable: appModel.canBatchSelect(asset)
+                                )
                                     .onTapGesture {
-                                        appModel.selectedAsset = asset
+                                        appModel.handleGridTap(on: asset)
                                     }
                                     .onAppear {
                                         Task {
@@ -277,6 +294,11 @@ private struct MediaGridView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 header
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if appModel.isSelectionMode {
+                    selectionToolbar
+                }
+            }
         }
     }
 
@@ -293,21 +315,43 @@ private struct MediaGridView: View {
 
                 Spacer()
 
-                Button {
-                    Task {
-                        await appModel.reload()
+                HStack(spacing: 10) {
+                    if !appModel.isSelectionMode && appModel.canEnterSelectionMode {
+                        selectionHeaderButton(title: "Select") {
+                            appModel.enterSelectionMode()
+                        }
+                        .frame(maxWidth: 148)
                     }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 16, weight: .bold))
-                        .frame(width: 38, height: 38)
-                        .background(Circle().fill(Color.white.opacity(0.95)))
+
+                    Button {
+                        Task {
+                            await appModel.reload()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .bold))
+                            .frame(width: 38, height: 38)
+                            .background(Circle().fill(Color.white.opacity(0.95)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(appModel.isLoadingInitialPage || appModel.isSelectionMode || appModel.isRunningBatchDownload)
                 }
-                .buttonStyle(.plain)
-                .disabled(appModel.isLoadingInitialPage)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+
+            if appModel.isSelectionMode {
+                HStack(spacing: 10) {
+                    selectionHeaderButton(title: appModel.selectionToggleAllTitle) {
+                        appModel.toggleSelectAll()
+                    }
+
+                    selectionHeaderButton(title: "Done") {
+                        appModel.exitSelectionMode()
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
 
             if let message = appModel.transientStatusMessage {
                 Text(message)
@@ -320,6 +364,74 @@ private struct MediaGridView: View {
         }
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
+    }
+
+    private func selectionHeaderButton(title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.9)
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+                .padding(.horizontal, 14)
+                .background(Capsule().fill(Color.white.opacity(0.95)))
+        }
+        .buttonStyle(.plain)
+        .disabled(appModel.isRunningBatchDownload)
+    }
+
+    private var selectionToolbar: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            HStack(alignment: .center, spacing: 14) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(appModel.batchActionTitle)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                    Text(appModel.batchSelectionSummary)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Cancel") {
+                    appModel.exitSelectionMode()
+                }
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .padding(.horizontal, 14)
+                .frame(height: 42)
+                .background(Capsule().fill(Color.white.opacity(0.92)))
+                .buttonStyle(.plain)
+                .disabled(appModel.isRunningBatchDownload)
+
+                Button {
+                    Task {
+                        await appModel.startBatchDownload()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if appModel.isRunningBatchDownload {
+                            ProgressView()
+                                .tint(.white)
+                        }
+                        Text(appModel.batchActionTitle)
+                    }
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 16)
+                    .frame(height: 42)
+                    .background(Capsule().fill(AppTheme.primaryPink))
+                    .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(appModel.selectedImageCount == 0 || appModel.isRunningBatchDownload)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 20)
+            .background(.ultraThinMaterial)
+        }
     }
 
     private var emptyState: some View {
@@ -358,29 +470,58 @@ private struct MediaGridView: View {
 
 private struct MediaGridCell: View {
     let asset: MediaAsset
+    let isSelectionMode: Bool
+    let isSelected: Bool
+    let isSelectable: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 Rectangle()
                     .fill(AppTheme.softPink.opacity(0.2))
                     .overlay {
                         SerializedGridThumbnail(url: asset.gridPreviewURL, type: asset.type)
                     }
                     .aspectRatio(1, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(selectionStrokeColor, lineWidth: selectionStrokeWidth)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-                HStack(spacing: 6) {
-                    Image(systemName: asset.type.badgeSymbol)
-                        .font(.system(size: 12, weight: .bold))
+                VStack {
+                    HStack {
+                        if isSelectionMode {
+                            selectionBadge
+                        }
 
-                    Text("PQ")
-                        .font(.system(size: 11, weight: .black, design: .rounded))
+                        Spacer()
+
+                        HStack(spacing: 6) {
+                            Image(systemName: asset.type.badgeSymbol)
+                                .font(.system(size: 12, weight: .bold))
+
+                            Text("PQ")
+                                .font(.system(size: 11, weight: .black, design: .rounded))
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(height: 30)
+                        .background(Capsule().fill(Color.black.opacity(0.72)))
+                        .foregroundStyle(.white)
+                    }
+
+                    Spacer()
+
+                    if isSelectionMode && !isSelectable {
+                        Text("Single Save")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(Color.black.opacity(0.72)))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(Capsule().fill(Color.black.opacity(0.72)))
-                .foregroundStyle(.white)
                 .padding(10)
             }
 
@@ -388,7 +529,7 @@ private struct MediaGridCell: View {
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .lineLimit(1)
 
-            Text(asset.formattedDate)
+            Text(asset.formattedGridDate)
                 .font(.system(size: 12, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
@@ -396,8 +537,28 @@ private struct MediaGridCell: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white.opacity(0.94))
+                .fill(isSelected ? AppTheme.softPink.opacity(0.95) : Color.white.opacity(0.94))
         )
+        .opacity(isSelectionMode && !isSelectable ? 0.7 : 1)
+    }
+
+    private var selectionBadge: some View {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 24, weight: .bold))
+            .foregroundStyle(isSelectable ? (isSelected ? AppTheme.primaryPink : .white) : .white.opacity(0.65))
+            .shadow(color: .black.opacity(0.16), radius: 8, y: 4)
+    }
+
+    private var selectionStrokeColor: Color {
+        guard isSelectionMode else { return .clear }
+        if isSelected {
+            return AppTheme.primaryPink
+        }
+        return isSelectable ? Color.white.opacity(0.85) : Color.clear
+    }
+
+    private var selectionStrokeWidth: CGFloat {
+        isSelectionMode && isSelected ? 3 : (isSelectionMode && isSelectable ? 1.25 : 0)
     }
 }
 
@@ -454,14 +615,14 @@ private struct MediaDetailView: View {
                                 await appModel.saveToPhotoLibrary(currentAsset)
                             }
                         }
-                        .disabled(appModel.isProcessingAssetAction)
+                        .disabled(appModel.isProcessingAssetAction || appModel.isRunningBatchDownload)
 
                         chromeButton(systemName: "square.and.arrow.up") {
                             Task {
                                 await appModel.prepareShare(for: currentAsset)
                             }
                         }
-                        .disabled(appModel.isProcessingAssetAction)
+                        .disabled(appModel.isProcessingAssetAction || appModel.isRunningBatchDownload)
                     }
                 }
                 .padding(.horizontal, 16)

@@ -93,6 +93,10 @@ struct MediaAsset: Identifiable, Hashable, Sendable {
         MediaAsset.dateFormatter.string(from: date)
     }
 
+    var formattedGridDate: String {
+        MediaAsset.gridDateFormatter.string(from: date)
+    }
+
     var suggestedFilename: String {
         let lastPathComponent = fullContentURL.lastPathComponent
         if !lastPathComponent.isEmpty {
@@ -108,6 +112,13 @@ struct MediaAsset: Identifiable, Hashable, Sendable {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private static let gridDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
         return formatter
     }()
 }

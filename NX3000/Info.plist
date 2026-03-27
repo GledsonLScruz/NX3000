@@ -35,6 +35,8 @@
 	<string>NX3000 saves selected camera photos and videos into an album named NX3000 in your Photos library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NX3000 needs Photos access to create and update the NX3000 album when you download media.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

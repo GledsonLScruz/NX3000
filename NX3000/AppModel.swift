@@ -11,16 +11,22 @@ final class AppModel: ObservableObject {
     @Published private(set) var isLoadingNextPage = false
     @Published private(set) var isProcessingAssetAction = false
     @Published private(set) var assetActionMessage = ""
+    @Published private(set) var isSelectionMode = false
+    @Published private(set) var selectedAssetIDs: Set<String> = []
+    @Published private(set) var isRunningBatchDownload = false
+    @Published private(set) var batchProgress: BatchDownloadProgress?
     @Published var showsLocalNetworkSettingsAlert = false
     @Published var selectedAsset: MediaAsset?
     @Published var activeShareItem: ShareItem?
     @Published var activeAlert: AlertContext?
+    @Published var activeBatchFailurePrompt: BatchFailurePromptContext?
 
     let networkStatusService = NetworkStatusService()
 
     private let cameraClient = NX3000CameraClient()
     private let localNetworkAuthorizationService = LocalNetworkAuthorizationService()
     private let photoLibraryService = PhotoLibraryService()
+    private let batchLiveActivityController = BatchDownloadLiveActivityController()
     private var cancellables: Set<AnyCancellable> = []
     private let pageSize = 50
     private var nextStartIndex = 0
@@ -29,6 +35,7 @@ final class AppModel: ObservableObject {
     private var localNetworkPermissionDenied = false
     private var hasCompletedHandshake = false
     private var hasHandledLaunch = false
+    private var batchFailureContinuation: CheckedContinuation<BatchFailureChoice, Never>?
 
     init() {
         networkStatusService.$snapshot
@@ -129,6 +136,11 @@ final class AppModel: ObservableObject {
             return "Loading photos from the camera..."
         }
 
+        if isSelectionMode {
+            let noun = selectedImageCount == 1 ? "photo" : "photos"
+            return "\(selectedImageCount) \(noun) selected"
+        }
+
         if let totalMatches {
             return "\(mediaItems.count) of \(totalMatches) loaded"
         }
@@ -137,6 +149,9 @@ final class AppModel: ObservableObject {
     }
 
     var transientStatusMessage: String? {
+        if let batchProgress {
+            return batchProgress.statusMessage
+        }
         if isLoadingInitialPage {
             return "Loading the first page"
         }
@@ -144,6 +159,40 @@ final class AppModel: ObservableObject {
             return "Loading more photos"
         }
         return nil
+    }
+
+    var canEnterSelectionMode: Bool {
+        !isRunningBatchDownload && mediaItems.contains(where: canBatchSelect(_:))
+    }
+
+    var selectedImageCount: Int {
+        selectedImageAssets.count
+    }
+
+    var allSelectableImagesSelected: Bool {
+        let selectableIDs = Set(mediaItems.filter(canBatchSelect(_:)).map(\.id))
+        guard !selectableIDs.isEmpty else { return false }
+        return selectableIDs.isSubset(of: selectedAssetIDs)
+    }
+
+    var selectionToggleAllTitle: String {
+        allSelectableImagesSelected ? "Clear All" : "Select All"
+    }
+
+    var batchActionTitle: String {
+        if let batchProgress {
+            return batchProgress.actionLabel
+        }
+        return selectedImageCount == 1 ? "Download 1 Photo" : "Download \(selectedImageCount) Photos"
+    }
+
+    var batchSelectionSummary: String {
+        if let batchProgress {
+            return batchProgress.summaryLabel
+        }
+
+        let noun = selectedImageCount == 1 ? "photo" : "photos"
+        return "\(selectedImageCount) \(noun) ready for sequential save"
     }
 
     func handleAppLaunch() async {
@@ -260,6 +309,181 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func handleGridTap(on asset: MediaAsset) {
+        guard !isRunningBatchDownload else { return }
+
+        if isSelectionMode {
+            toggleSelection(for: asset)
+        } else {
+            selectedAsset = asset
+        }
+    }
+
+    func enterSelectionMode() {
+        guard canEnterSelectionMode else { return }
+        selectedAsset = nil
+        isSelectionMode = true
+    }
+
+    func exitSelectionMode() {
+        guard !isRunningBatchDownload else { return }
+        clearSelection()
+    }
+
+    func toggleSelection(for asset: MediaAsset) {
+        guard isSelectionMode else { return }
+        guard canBatchSelect(asset) else { return }
+
+        if selectedAssetIDs.contains(asset.id) {
+            selectedAssetIDs.remove(asset.id)
+        } else {
+            selectedAssetIDs.insert(asset.id)
+        }
+    }
+
+    func toggleSelectAll() {
+        guard isSelectionMode else { return }
+
+        let selectableIDs = Set(mediaItems.filter(canBatchSelect(_:)).map(\.id))
+        guard !selectableIDs.isEmpty else { return }
+
+        if allSelectableImagesSelected {
+            selectedAssetIDs.subtract(selectableIDs)
+        } else {
+            selectedAssetIDs.formUnion(selectableIDs)
+        }
+    }
+
+    func isAssetSelected(_ asset: MediaAsset) -> Bool {
+        selectedAssetIDs.contains(asset.id)
+    }
+
+    func canBatchSelect(_ asset: MediaAsset) -> Bool {
+        asset.type == .image
+    }
+
+    func startBatchDownload() async {
+        guard !isRunningBatchDownload else { return }
+
+        let assets = selectedImageAssets
+        guard !assets.isEmpty else {
+            activeAlert = AlertContext(
+                title: "No Photos Selected",
+                message: "Choose at least one photo before starting a batch download."
+            )
+            return
+        }
+
+        isRunningBatchDownload = true
+        activeAlert = nil
+        activeBatchFailurePrompt = nil
+        selectedAsset = nil
+
+        do {
+            let batchSession = try await photoLibraryService.prepareBatchSession()
+            let initialProgress = BatchDownloadProgress(
+                totalCount: assets.count,
+                processedCount: 0,
+                savedCount: 0,
+                failedCount: 0,
+                currentAssetTitle: assets.first?.title,
+                phase: .starting
+            )
+            batchProgress = initialProgress
+            await batchLiveActivityController.start(with: initialProgress)
+
+            var savedCount = 0
+            var failedCount = 0
+            var stoppedEarly = false
+
+            for asset in assets {
+                await updateBatchProgress(
+                    totalCount: assets.count,
+                    processedCount: savedCount + failedCount,
+                    savedCount: savedCount,
+                    failedCount: failedCount,
+                    currentAssetTitle: asset.title,
+                    phase: .downloading
+                )
+
+                do {
+                    let localURL = try await cameraClient.downloadOriginal(for: asset)
+
+                    await updateBatchProgress(
+                        totalCount: assets.count,
+                        processedCount: savedCount + failedCount,
+                        savedCount: savedCount,
+                        failedCount: failedCount,
+                        currentAssetTitle: asset.title,
+                        phase: .saving
+                    )
+
+                    try await batchSession.saveAsset(at: localURL, type: asset.type)
+                    savedCount += 1
+                } catch {
+                    failedCount += 1
+
+                    await updateBatchProgress(
+                        totalCount: assets.count,
+                        processedCount: savedCount + failedCount,
+                        savedCount: savedCount,
+                        failedCount: failedCount,
+                        currentAssetTitle: asset.title,
+                        phase: .awaitingDecision
+                    )
+
+                    let choice = await promptForBatchFailure(asset: asset, error: error)
+                    if choice == .stop {
+                        stoppedEarly = true
+                        break
+                    }
+                }
+            }
+
+            let finalProgress = BatchDownloadProgress(
+                totalCount: assets.count,
+                processedCount: savedCount + failedCount,
+                savedCount: savedCount,
+                failedCount: failedCount,
+                currentAssetTitle: nil,
+                phase: stoppedEarly ? .stopped : .completed
+            )
+
+            batchProgress = finalProgress
+            await batchLiveActivityController.end(with: finalProgress)
+            finishBatchDownload(with: finalProgress)
+        } catch {
+            let failedProgress = BatchDownloadProgress(
+                totalCount: assets.count,
+                processedCount: 0,
+                savedCount: 0,
+                failedCount: 0,
+                currentAssetTitle: nil,
+                phase: .failedToStart
+            )
+            batchProgress = failedProgress
+            await batchLiveActivityController.end(with: failedProgress)
+            isRunningBatchDownload = false
+            batchProgress = nil
+            activeAlert = AlertContext(
+                title: "Batch Download Failed",
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func resolveBatchFailurePrompt(shouldContinue: Bool) {
+        activeBatchFailurePrompt = nil
+
+        guard let continuation = batchFailureContinuation else { return }
+        batchFailureContinuation = nil
+        continuation.resume(returning: shouldContinue ? .continueProcessing : .stop)
+    }
+
+    private var selectedImageAssets: [MediaAsset] {
+        mediaItems.filter { selectedAssetIDs.contains($0.id) && canBatchSelect($0) }
+    }
+
     private var hasMorePages: Bool {
         if let totalMatches {
             return mediaItems.count < totalMatches
@@ -329,9 +553,11 @@ final class AppModel: ObservableObject {
             if replaceExisting {
                 mediaItems = page.items
             } else {
-                let existingIDs = Set(mediaItems.map { $0.id })
+                let existingIDs = Set(mediaItems.map(\.id))
                 mediaItems.append(contentsOf: page.items.filter { !existingIDs.contains($0.id) })
             }
+
+            reconcileSelectionState()
         } catch {
             if replaceExisting {
                 connectionState = .browseFailed(error.localizedDescription)
@@ -341,6 +567,67 @@ final class AppModel: ObservableObject {
                     message: error.localizedDescription
                 )
             }
+        }
+    }
+
+    private func reconcileSelectionState() {
+        let availableIDs = Set(mediaItems.map(\.id))
+        selectedAssetIDs = selectedAssetIDs.intersection(availableIDs)
+        if isSelectionMode && selectedAssetIDs.isEmpty && !isRunningBatchDownload {
+            isSelectionMode = false
+        }
+    }
+
+    private func clearSelection() {
+        isSelectionMode = false
+        selectedAssetIDs.removeAll()
+    }
+
+    private func updateBatchProgress(
+        totalCount: Int,
+        processedCount: Int,
+        savedCount: Int,
+        failedCount: Int,
+        currentAssetTitle: String?,
+        phase: BatchDownloadProgress.Phase
+    ) async {
+        let progress = BatchDownloadProgress(
+            totalCount: totalCount,
+            processedCount: processedCount,
+            savedCount: savedCount,
+            failedCount: failedCount,
+            currentAssetTitle: currentAssetTitle,
+            phase: phase
+        )
+        batchProgress = progress
+        await batchLiveActivityController.update(with: progress)
+    }
+
+    private func finishBatchDownload(with progress: BatchDownloadProgress) {
+        isRunningBatchDownload = false
+        activeBatchFailurePrompt = nil
+        batchFailureContinuation = nil
+        batchProgress = nil
+        clearSelection()
+
+        let savedLabel = progress.savedCount == 1 ? "1 photo was" : "\(progress.savedCount) photos were"
+        let failureSuffix = progress.failedCount > 0 ? " \(progress.failedCount) failed." : ""
+        let title = progress.phase == .stopped ? "Download Stopped" : "Download Complete"
+
+        activeAlert = AlertContext(
+            title: title,
+            message: "\(savedLabel) saved to Photos.\(failureSuffix)"
+        )
+    }
+
+    private func promptForBatchFailure(asset: MediaAsset, error: Error) async -> BatchFailureChoice {
+        activeBatchFailurePrompt = BatchFailurePromptContext(
+            assetTitle: asset.title,
+            message: error.localizedDescription
+        )
+
+        return await withCheckedContinuation { continuation in
+            batchFailureContinuation = continuation
         }
     }
 }

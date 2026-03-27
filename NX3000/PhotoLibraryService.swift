@@ -6,13 +6,49 @@ final class PhotoLibraryService {
     private let albumName = "NX3000"
 
     func saveAsset(at fileURL: URL, type: MediaAssetType) async throws {
+        let session = try await prepareBatchSession()
+        try await session.saveAsset(at: fileURL, type: type)
+    }
+
+    func prepareBatchSession() async throws -> PhotoLibraryBatchSession {
         let authorization = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         guard authorization == .authorized || authorization == .limited else {
             throw NX3000Error.photoLibraryAccessDenied
         }
 
         let album = try await fetchOrCreateAlbum()
-        try await saveFile(fileURL, to: album, type: type)
+        return PhotoLibraryBatchSession(album: album, service: self)
+    }
+
+    fileprivate func saveFile(_ fileURL: URL, to album: PHAssetCollection, type: MediaAssetType) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHPhotoLibrary.shared().performChanges({
+                let creationRequest = PHAssetCreationRequest.forAsset()
+                switch type {
+                case .image:
+                    creationRequest.addResource(with: .photo, fileURL: fileURL, options: nil)
+                case .video:
+                    creationRequest.addResource(with: .video, fileURL: fileURL, options: nil)
+                }
+
+                guard let placeholder = creationRequest.placeholderForCreatedAsset,
+                      let albumChangeRequest = PHAssetCollectionChangeRequest(for: album) else {
+                    return
+                }
+
+                albumChangeRequest.addAssets([placeholder] as NSArray)
+            }, completionHandler: { success, error in
+                if let error {
+                    continuation.resume(throwing: NX3000Error.photoLibrarySaveFailed(error.localizedDescription))
+                    return
+                }
+                guard success else {
+                    continuation.resume(throwing: NX3000Error.photoLibrarySaveFailed("The Photos operation did not finish successfully."))
+                    return
+                }
+                continuation.resume(returning: ())
+            })
+        }
     }
 
     private func fetchOrCreateAlbum() async throws -> PHAssetCollection {
@@ -56,35 +92,19 @@ final class PhotoLibraryService {
         }
         return foundAlbum
     }
+}
 
-    private func saveFile(_ fileURL: URL, to album: PHAssetCollection, type: MediaAssetType) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            PHPhotoLibrary.shared().performChanges({
-                let creationRequest = PHAssetCreationRequest.forAsset()
-                switch type {
-                case .image:
-                    creationRequest.addResource(with: .photo, fileURL: fileURL, options: nil)
-                case .video:
-                    creationRequest.addResource(with: .video, fileURL: fileURL, options: nil)
-                }
+@MainActor
+final class PhotoLibraryBatchSession {
+    private let album: PHAssetCollection
+    private unowned let service: PhotoLibraryService
 
-                guard let placeholder = creationRequest.placeholderForCreatedAsset,
-                      let albumChangeRequest = PHAssetCollectionChangeRequest(for: album) else {
-                    return
-                }
+    init(album: PHAssetCollection, service: PhotoLibraryService) {
+        self.album = album
+        self.service = service
+    }
 
-                albumChangeRequest.addAssets([placeholder] as NSArray)
-            }, completionHandler: { success, error in
-                if let error {
-                    continuation.resume(throwing: NX3000Error.photoLibrarySaveFailed(error.localizedDescription))
-                    return
-                }
-                guard success else {
-                    continuation.resume(throwing: NX3000Error.photoLibrarySaveFailed("The Photos operation did not finish successfully."))
-                    return
-                }
-                continuation.resume(returning: ())
-            })
-        }
+    func saveAsset(at fileURL: URL, type: MediaAssetType) async throws {
+        try await service.saveFile(fileURL, to: album, type: type)
     }
 }
